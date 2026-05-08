@@ -1,7 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFileStream } from '@/lib/gdrive';
-import archiver from 'archiver';
-import { Readable } from 'stream';
+import JSZip from 'jszip';
+
+/**
+ * Converts a Node.js Readable stream to a Buffer.
+ * Used because archiver streaming doesn't work reliably in Vercel serverless.
+ */
+function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const nodeStream = stream as import('stream').Readable;
+
+    nodeStream.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+
+    nodeStream.on('end', () => {
+      resolve(Buffer.concat(chunks));
+    });
+
+    nodeStream.on('error', (err: Error) => {
+      reject(err);
+    });
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,57 +38,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Too many files (max 200)' }, { status: 400 });
     }
 
-    const archive = archiver('zip', {
-      zlib: { level: 1 }, // Fast compression for already-compressed audio
-    });
+    const zip = new JSZip();
 
-    // Use Node.js PassThrough to bridge archiver (Node stream) to Web ReadableStream
-    const passThrough = new Readable({ read() {} });
-
-    archive.pipe(passThrough);
-
-    const readableStream = new ReadableStream({
-      start(controller) {
-        passThrough.on('data', (chunk: Buffer) => {
-          controller.enqueue(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
-        });
-
-        passThrough.on('end', () => {
-          controller.close();
-        });
-
-        passThrough.on('error', (err: Error) => {
-          console.error('PassThrough error:', err);
-          controller.error(err);
-        });
-      },
-    });
-
-    // Add each file from GDrive
+    // Fetch each file from GDrive and add to zip
     for (const file of files) {
       try {
         const fileStream = await getFileStream(file.id);
-        archive.append(fileStream as NodeJS.ReadableStream, {
-          name: file.name,
-        });
+        const buffer = await streamToBuffer(fileStream);
+        zip.file(file.name, buffer, { binary: true });
       } catch (err) {
         console.error(`Failed to add ${file.name} to archive:`, err);
         // Continue with other files
       }
     }
 
-    archive.finalize();
-
-    archive.on('error', (err: Error) => {
-      console.error('Archive error:', err);
+    // Generate the zip as a buffer (fully in-memory, reliable in serverless)
+    const zipBuffer = await zip.generateAsync({
+      type: 'nodebuffer',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 1 }, // Fast compression for already-compressed audio
     });
 
     const timestamp = new Date().toISOString().slice(0, 10);
-    return new NextResponse(readableStream, {
+    return new NextResponse(zipBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(`audioteka_${timestamp}.zip`)}`,
+        'Content-Length': String(zipBuffer.length),
         'Cache-Control': 'no-cache',
       },
     });
