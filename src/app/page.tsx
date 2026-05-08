@@ -289,16 +289,23 @@ function FolderItem({
   const fileCount = countFiles(folder);
   const isSearchActive = searchQuery.trim().length > 0;
 
+  // Check if the folder's own name matches the search query
+  const folderNameMatches = isSearchActive && stemMatch(searchQuery, folder.name);
+
   // Filter children based on search
+  // If the folder name itself matches → show ALL children (user searched for this folder)
+  // Otherwise → only show children that match the query
   const filteredChildren = useMemo(() => {
     if (!isSearchActive) return folder.children;
+    // If folder name matches, show everything inside
+    if (stemMatch(searchQuery, folder.name)) return folder.children;
     return folder.children.filter((child) => {
       if (isFolder(child)) {
         return folderMatches(child, searchQuery);
       }
       return stemMatch(searchQuery, child.name);
     });
-  }, [folder.children, searchQuery, isSearchActive]);
+  }, [folder.children, folder.name, searchQuery, isSearchActive]);
 
   const filteredSubFolders = filteredChildren.filter(isFolder);
   const filteredFiles = filteredChildren.filter((c): c is AudioFile => !isFolder(c));
@@ -306,7 +313,9 @@ function FolderItem({
   // During search, auto-expand folders that have matches
   const shouldAutoExpand = isSearchActive && folderMatches(folder, searchQuery);
 
-  if (isSearchActive && filteredChildren.length === 0) return null;
+  // Don't hide the folder if its name matches the query (even if no children match individually)
+  // Don't hide the folder if it has matching descendants (folderMatches already checked this)
+  if (isSearchActive && filteredChildren.length === 0 && !folderNameMatches) return null;
 
   const showContent = isExpanded || shouldAutoExpand;
 
