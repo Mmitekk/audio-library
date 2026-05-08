@@ -25,12 +25,11 @@ function getAuth() {
   } catch {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY is not valid JSON');
   }
-  const auth = new google.auth.JWT(
-    credentials.client_email,
-    undefined,
-    credentials.private_key,
-    ['https://www.googleapis.com/auth/drive.readonly']
-  );
+  const auth = new google.auth.JWT({
+    email: credentials.client_email,
+    key: credentials.private_key,
+    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  });
   return auth;
 }
 
