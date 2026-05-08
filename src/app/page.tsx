@@ -454,6 +454,11 @@ export default function Home() {
   const [queueIndex, setQueueIndex] = useState(0);
   const [isPlayerVisible, setIsPlayerVisible] = useState(false);
 
+  // Refs to avoid stale closures in audio event listeners
+  const playbackQueueRef = useRef<AudioFile[]>([]);
+  const queueIndexRef = useRef(0);
+  const playFileRef = useRef<(file: AudioFile, queue: AudioFile[], index: number) => void>(() => {});
+
   // Download state
   const [downloadingZip, setDownloadingZip] = useState<string | null>(null);
 
@@ -493,11 +498,13 @@ export default function Home() {
       });
 
       audioRef.current.addEventListener('ended', () => {
-        // Auto-advance to next track
-        if (playbackQueue.length > 0) {
-          const nextIdx = queueIndex + 1;
-          if (nextIdx < playbackQueue.length) {
-            playFile(playbackQueue[nextIdx], playbackQueue, nextIdx);
+        // Auto-advance to next track using refs to avoid stale closures
+        const queue = playbackQueueRef.current;
+        const idx = queueIndexRef.current;
+        if (queue.length > 0) {
+          const nextIdx = idx + 1;
+          if (nextIdx < queue.length) {
+            playFileRef.current(queue[nextIdx], queue, nextIdx);
           } else {
             setIsPlaying(false);
           }
@@ -529,6 +536,10 @@ export default function Home() {
       setQueueIndex(index);
       setIsPlayerVisible(true);
 
+      // Keep refs in sync for the ended event handler
+      playbackQueueRef.current = queue;
+      queueIndexRef.current = index;
+
       const audioUrl = `/api/gdrive/stream?fileId=${encodeURIComponent(file.id)}`;
       audioRef.current.src = audioUrl;
       audioRef.current.load();
@@ -541,6 +552,11 @@ export default function Home() {
     },
     []
   );
+
+  // Keep playFileRef in sync so the ended handler always calls the latest version
+  useEffect(() => {
+    playFileRef.current = playFile;
+  }, [playFile]);
 
   const handlePlay = useCallback(
     (file: AudioFile) => {

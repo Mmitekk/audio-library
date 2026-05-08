@@ -1,30 +1,34 @@
 /**
- * Russian morphological stemmer - simple suffix stripping approach
- * Removes common Russian endings to get the stem of a word
+ * Russian morphological stemmer - conservative suffix stripping approach
+ * Removes common Russian endings to get the stem of a word.
+ * Kept conservative to avoid over-matching (e.g. "ветер" should not match "вечер").
  */
 export function russianStem(word: string): string {
   let w = word.toLowerCase().trim();
-  if (w.length <= 2) return w;
+  if (w.length <= 3) return w;
 
-  // Remove typical Russian noun/adjective endings (longest first to avoid partial matches)
-  w = w.replace(/(?:ими|ыми|ениями|аниями|ятиями|ствием|ствиями|остями|ествами|еньями|еньем|ениями|оями|оями|елями|елями)$/i, '');
-  w = w.replace(/(?:ая|яя|ое|ее|ые|ие|ого|ому|ым|им|ого|ому|ыми|ими|ой|ей|ий|ый|ый|ою|ею|ою|ую|а|о|у|е|и|ы|ь|ю|я)$/i, '');
+  // Remove typical Russian adjective endings (longest first)
+  w = w.replace(/(?:его|ому|ыми|ими|его|ому|ому|ыми|ими)$/i, '');
+  // Remove adjective/possessive endings
+  w = w.replace(/(?:ая|яя|ое|ее|ые|ие|ой|ей|ий|ый|ый|ою|ею|ую|ого|ому|ым|им|ых|их|ою)$/i, '');
 
-  // Remove verb endings
-  w = w.replace(/(?:емся|уетесь|иваются|аются|овались|евались|овались|ивались|овать|евать|ивать|оваться|еваться|иваться|уется|уется|ется|ется|ются|ются|атся|атся|им|ишь|ит|ите|ем|ешь|ет|ют|ут|ул|ула|уло|ули|лся|лась|лось|лись|ен|ена|ено|ены|ан|ана|ано|аны|гся|ться|ного|ному|ным|ными|ном|вший|вшая|вшее|вшие|вой|вого|вому|вым|вими|вом)$/i, '');
+  // Remove verb endings (participles, gerunds, conjugations)
+  w = w.replace(/(?:вшись|вши|ем|ешь|ет|ем|ете|ет|им|ишь|ит|ите|ят|ют|уют|ат|ют|ул|ула|уло|ули|лся|лась|лось|лись|ен|ена|ено|ены|ан|ана|ано|аны|гся|ться|ясь|вший|вшая|вшее|вшие|овый|овая|овое|овые|ового|овой|овому|овыми|овом|ин|ина|ину|иной|иной|иную|иного|иному|иными|ином|он|она|оно|оных|оному|онами|оном|ень|еня|енью|енем|еньем|ья|ью|ье|ьё|ьего|ьему|ьими|ьём)$/i, '');
 
-  // Remove more common suffixes
-  w = w.replace(/(?:ость|ость|ость|ость|ствие|ствие|ствие|ствие|тель|тель|тель|тель|очек|ек|ик|ок|ечк|ичк|ушк|юшк|ышк|к|нк|енк|инк|оньк|оньк|ель|ель|арь|яр|тель|тель|ник|чик|щик|лов|тель)$/i, '');
+  // Remove noun endings (longest first, more conservative)
+  w = w.replace(/(?:ами|ями|ость|остью|остями|ствие|ствием|ствиями|ением|ениями|ениями|тель|теля|телем|телей|телем|телями|телях|ейка|ейке|ейку|ейкой|ейком|ёнок|ёнка|ёнку|ёнком|очка|очку|очкой|очке|ечка|ечку|ечкой|ечке|ичка|ичку|ичкой|ичке|ушка|ушку|ушкой|ушке|юшка|юшку|юшкой|юшке|ышка|ышку|ышкой|ышке|онька|оньку|онькой|оньке|ник|ника|нику|ником|никах|чик|чика|чику|чиком|чиках|щик|щика|щику|щиком|щиках|ов|ев|ёв|ов|ей|ин|ин|ам|ям|ах|ях|ом|ем|ём|а|о|у|е|и|ы|ь|ю|я)$/i, '');
 
-  // Ensure we have at least 2 characters
-  if (w.length < 2) return word.toLowerCase().trim();
+  // Ensure we have at least 3 characters for meaningful matching
+  if (w.length < 3) return word.toLowerCase().trim();
 
   return w;
 }
 
 /**
  * Check if a query matches a text using Russian stemming
- * Returns true if any stem from query matches any stem from text
+ * Returns true if ALL query stems are found in the text stems (AND logic).
+ * A match means: the text stem STARTS WITH or CONTAINS the query stem as a substring,
+ * but the query stem must be at least 3 chars long to avoid false positives.
  */
 export function stemMatch(query: string, text: string): boolean {
   if (!query.trim()) return false;
@@ -35,20 +39,40 @@ export function stemMatch(query: string, text: string): boolean {
   const queryStems = queryWords.map(russianStem).filter(s => s.length > 0);
   const textStems = textWords.map(russianStem).filter(s => s.length > 0);
 
+  // ALL query words must match (AND logic)
   for (const qs of queryStems) {
+    let matched = false;
+
+    // Direct substring check first
+    const queryLower = query.toLowerCase();
+    const textLower = text.toLowerCase();
+    if (textLower.includes(queryLower)) {
+      continue; // This query word matched
+    }
+
     for (const ts of textStems) {
-      if (ts.includes(qs) || qs.includes(ts)) {
-        return true;
+      // Text stem must contain the query stem (query is more specific)
+      // but query stem must be at least 3 chars to avoid false positives
+      if (qs.length >= 3 && ts.includes(qs)) {
+        matched = true;
+        break;
+      }
+      // Also allow exact match for short stems
+      if (ts === qs) {
+        matched = true;
+        break;
+      }
+      // Allow if text stem starts with query stem AND query stem is substantial
+      if (qs.length >= 4 && ts.startsWith(qs)) {
+        matched = true;
+        break;
       }
     }
+
+    if (!matched) return false;
   }
 
-  // Also check direct substring match
-  const queryLower = query.toLowerCase();
-  const textLower = text.toLowerCase();
-  if (textLower.includes(queryLower)) return true;
-
-  return false;
+  return true;
 }
 
 /**
@@ -67,7 +91,12 @@ export function highlightMatch(text: string, query: string): string {
     for (const qw of queryWords) {
       const stem = russianStem(qw);
       const wordStem = russianStem(trimmed);
-      if (wordStem.includes(stem) || stem.includes(wordStem) || trimmed.toLowerCase().includes(qw.toLowerCase())) {
+      if (
+        (stem.length >= 3 && wordStem.includes(stem)) ||
+        wordStem === stem ||
+        (stem.length >= 4 && wordStem.startsWith(stem)) ||
+        trimmed.toLowerCase().includes(qw.toLowerCase())
+      ) {
         return `<mark class="bg-yellow-500/30 text-yellow-200 rounded px-0.5">${word}</mark>`;
       }
     }

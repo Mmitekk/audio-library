@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFileStream } from '@/lib/gdrive';
 import archiver from 'archiver';
+import { Readable } from 'stream';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,46 +16,53 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Too many files (max 200)' }, { status: 400 });
     }
 
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        const archive = archiver('zip', {
-          zlib: { level: 1 }, // Fast compression for already-compressed audio
+    const archive = archiver('zip', {
+      zlib: { level: 1 }, // Fast compression for already-compressed audio
+    });
+
+    // Use Node.js PassThrough to bridge archiver (Node stream) to Web ReadableStream
+    const passThrough = new Readable({ read() {} });
+
+    archive.pipe(passThrough);
+
+    const readableStream = new ReadableStream({
+      start(controller) {
+        passThrough.on('data', (chunk: Buffer) => {
+          controller.enqueue(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
         });
 
-        // Pipe archive data to the response stream
-        archive.on('data', (chunk: Buffer) => {
-          controller.enqueue(encoder.encode(chunk));
-        });
-
-        archive.on('end', () => {
+        passThrough.on('end', () => {
           controller.close();
         });
 
-        archive.on('error', (err: Error) => {
-          console.error('Archive error:', err);
+        passThrough.on('error', (err: Error) => {
+          console.error('PassThrough error:', err);
           controller.error(err);
         });
-
-        // Add each file from GDrive
-        for (const file of files) {
-          try {
-            const fileStream = await getFileStream(file.id);
-            archive.append(fileStream as NodeJS.ReadableStream, {
-              name: file.name,
-            });
-          } catch (err) {
-            console.error(`Failed to add ${file.name} to archive:`, err);
-            // Continue with other files
-          }
-        }
-
-        archive.finalize();
       },
     });
 
+    // Add each file from GDrive
+    for (const file of files) {
+      try {
+        const fileStream = await getFileStream(file.id);
+        archive.append(fileStream as NodeJS.ReadableStream, {
+          name: file.name,
+        });
+      } catch (err) {
+        console.error(`Failed to add ${file.name} to archive:`, err);
+        // Continue with other files
+      }
+    }
+
+    archive.finalize();
+
+    archive.on('error', (err: Error) => {
+      console.error('Archive error:', err);
+    });
+
     const timestamp = new Date().toISOString().slice(0, 10);
-    return new NextResponse(stream, {
+    return new NextResponse(readableStream, {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
