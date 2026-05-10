@@ -1,11 +1,97 @@
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || 'prj_QG1xAc1X8N05FmOBucsszCQPlWAh';
 
-interface VercelEnvVar {
+type EnvTarget = ('production' | 'preview' | 'development')[];
+
+interface VercelEnvVarEntry {
+  id: string;
   key: string;
-  value: string;
-  type: 'encrypted';
-  target: ('production' | 'preview' | 'development')[];
+  value?: string;
+  type: string;
+  target: string[];
+}
+
+async function listEnvVars(): Promise<VercelEnvVarEntry[]> {
+  const response = await fetch(
+    `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env`,
+    {
+      headers: {
+        Authorization: `Bearer ${VERCEL_TOKEN}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to list env vars: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.envs || [];
+}
+
+async function deleteEnvVar(envId: string): Promise<void> {
+  const response = await fetch(
+    `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env/${envId}`,
+    {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${VERCEL_TOKEN}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete env var ${envId}: ${response.status}`);
+  }
+}
+
+async function createEnvVar(key: string, value: string): Promise<void> {
+  const response = await fetch(
+    `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${VERCEL_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify([
+        {
+          key,
+          value,
+          type: 'encrypted',
+          target: ['production', 'preview', 'development'],
+        },
+      ]),
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `Failed to create env var: ${response.status}`);
+  }
+}
+
+async function patchEnvVar(envId: string, value: string): Promise<void> {
+  const response = await fetch(
+    `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env/${envId}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${VERCEL_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        value,
+        type: 'encrypted',
+        target: ['production', 'preview', 'development'],
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `Failed to update env var ${envId}: ${response.status}`);
+  }
 }
 
 export async function updateEnvVar(key: string, value: string): Promise<{ success: boolean; error?: string }> {
@@ -14,31 +100,13 @@ export async function updateEnvVar(key: string, value: string): Promise<{ succes
   }
 
   try {
-    // Update the environment variable via Vercel API
-    const response = await fetch(
-      `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env`,
-      {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${VERCEL_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          upsert: [
-            {
-              key,
-              value,
-              type: 'encrypted',
-              target: ['production', 'preview', 'development'],
-            } satisfies VercelEnvVar,
-          ],
-        }),
-      }
-    );
+    const existing = await listEnvVars();
+    const found = existing.find((e) => e.key === key);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `Vercel API error: ${response.status}`);
+    if (found) {
+      await patchEnvVar(found.id, value);
+    } else {
+      await createEnvVar(key, value);
     }
 
     return { success: true };
@@ -56,30 +124,16 @@ export async function updateMultipleEnvVars(
   }
 
   try {
-    const envVars: VercelEnvVar[] = Object.entries(vars).map(([key, value]) => ({
-      key,
-      value,
-      type: 'encrypted' as const,
-      target: ['production', 'preview', 'development'] as const,
-    }));
+    const existing = await listEnvVars();
 
-    const response = await fetch(
-      `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env`,
-      {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${VERCEL_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          upsert: envVars,
-        }),
+    for (const [key, value] of Object.entries(vars)) {
+      const found = existing.find((e) => e.key === key);
+
+      if (found) {
+        await patchEnvVar(found.id, value);
+      } else {
+        await createEnvVar(key, value);
       }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `Vercel API error: ${response.status}`);
     }
 
     return { success: true };
