@@ -1,5 +1,5 @@
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
-const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || 'prj_Qf8AQPcjCBwBQlVgsBMRpx3s';
+const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || 'prj_QG1xAc1X8N05FmOBucsszCQPlWAh';
 
 interface VercelEnvVar {
   key: string;
