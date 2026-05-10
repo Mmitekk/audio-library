@@ -5,6 +5,16 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import {
   Search,
   Play,
@@ -25,6 +35,9 @@ import {
   AlertCircle,
   X,
   Clock,
+  MessageSquarePlus,
+  CheckCircle2,
+  Send,
 } from 'lucide-react';
 import { stemMatch } from '@/lib/stemmer';
 
@@ -471,6 +484,13 @@ export default function Home() {
   // Download state
   const [downloadingZip, setDownloadingZip] = useState<string | null>(null);
 
+  // Sound request dialog state
+  const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [requestForm, setRequestForm] = useState({ name: '', email: '', description: '' });
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const [requestSuccess, setRequestSuccess] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+
   // Fetch folder structure
   useEffect(() => {
     async function fetchData() {
@@ -700,6 +720,45 @@ export default function Home() {
     }
   }, []);
 
+  // Sound request form handler
+  const handleRequestSubmit = useCallback(async () => {
+    if (!requestForm.name.trim() || !requestForm.description.trim()) return;
+
+    setRequestSubmitting(true);
+    setRequestError(null);
+
+    try {
+      const res = await fetch('/api/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: requestForm.name.trim(),
+          email: requestForm.email.trim() || undefined,
+          description: requestForm.description.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Ошибка отправки запроса');
+      }
+
+      setRequestSuccess(true);
+      setRequestForm({ name: '', email: '', description: '' });
+
+      // Close dialog after a brief delay to show success
+      setTimeout(() => {
+        setRequestSuccess(false);
+        setRequestDialogOpen(false);
+      }, 2000);
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : 'Произошла ошибка');
+    } finally {
+      setRequestSubmitting(false);
+    }
+  }, [requestForm]);
+
   // Compute progress
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -734,12 +793,123 @@ export default function Home() {
             <div className="bg-primary/15 p-2 rounded-lg">
               <Music className="h-6 w-6 text-primary" />
             </div>
-            <div>
+            <div className="flex-1">
               <h1 className="text-xl font-bold tracking-tight">Аудиотека</h1>
               <p className="text-xs text-muted-foreground">
                 Библиотека звуковых эффектов
               </p>
             </div>
+
+            {/* Sound Request Button */}
+            <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  size="sm"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+                >
+                  <MessageSquarePlus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Запросить звук</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="border-border sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <MessageSquarePlus className="h-5 w-5 text-primary" />
+                    Запросить звук
+                  </DialogTitle>
+                  <DialogDescription>
+                    Не нашли нужный звук? Опишите его, и мы постараемся добавить его в библиотеку.
+                  </DialogDescription>
+                </DialogHeader>
+
+                {requestSuccess ? (
+                  <div className="flex flex-col items-center gap-3 py-6">
+                    <div className="bg-green-500/10 p-3 rounded-full">
+                      <CheckCircle2 className="h-8 w-8 text-green-500" />
+                    </div>
+                    <p className="text-sm font-medium text-center">Запрос успешно отправлен!</p>
+                    <p className="text-xs text-muted-foreground text-center">
+                      Мы постараемся добавить нужный звук как можно скорее.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="request-name">
+                        Имя <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="request-name"
+                        placeholder="Ваше имя"
+                        value={requestForm.name}
+                        onChange={(e) =>
+                          setRequestForm((prev) => ({ ...prev, name: e.target.value }))
+                        }
+                        className="bg-secondary/50 border-border"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="request-email">Email</Label>
+                      <Input
+                        id="request-email"
+                        type="email"
+                        placeholder="your@email.com (необязательно)"
+                        value={requestForm.email}
+                        onChange={(e) =>
+                          setRequestForm((prev) => ({ ...prev, email: e.target.value }))
+                        }
+                        className="bg-secondary/50 border-border"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="request-description">
+                        Описание звука <span className="text-destructive">*</span>
+                      </Label>
+                      <Textarea
+                        id="request-description"
+                        placeholder="Опишите звук, который вам нужен (например: звук дождя, хлопанье двери, звон колоколов...)"
+                        value={requestForm.description}
+                        onChange={(e) =>
+                          setRequestForm((prev) => ({ ...prev, description: e.target.value }))
+                        }
+                        className="bg-secondary/50 border-border min-h-[100px]"
+                      />
+                    </div>
+
+                    {requestError && (
+                      <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 p-3 rounded-lg">
+                        <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                        <span>{requestError}</span>
+                      </div>
+                    )}
+
+                    <Button
+                      onClick={handleRequestSubmit}
+                      disabled={
+                        requestSubmitting ||
+                        !requestForm.name.trim() ||
+                        !requestForm.description.trim()
+                      }
+                      className="w-full gap-2"
+                    >
+                      {requestSubmitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Отправка...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-4 w-4" />
+                          Отправить запрос
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
 
           {/* Search */}
