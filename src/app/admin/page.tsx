@@ -85,6 +85,9 @@ export default function AdminPage() {
   const [testEmailSending, setTestEmailSending] = useState(false);
   const [testEmailMessage, setTestEmailMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // SMTP password (separate from settings to avoid sending masked value)
+  const [smtpPass, setSmtpPass] = useState('');
+
   useEffect(() => {
     // Load last sync from sessionStorage
     const stored = sessionStorage.getItem('last_sync');
@@ -177,7 +180,7 @@ export default function AdminPage() {
           SMTP_HOST: settings.SMTP_HOST,
           SMTP_PORT: settings.SMTP_PORT,
           SMTP_USER: settings.SMTP_USER,
-          SMTP_PASS: settings.SMTP_PASS,
+          SMTP_PASS: smtpPass,
           FROM_EMAIL: settings.FROM_EMAIL,
         }),
       });
@@ -547,9 +550,8 @@ export default function AdminPage() {
                           id="smtp-pass"
                           type="password"
                           placeholder="Оставьте пустым, если не меняете"
-                          onChange={(e) =>
-                            setSettings((prev) => prev ? { ...prev, SMTP_PASS: e.target.value } : prev)
-                          }
+                          value={smtpPass}
+                          onChange={(e) => setSmtpPass(e.target.value)}
                           className="bg-secondary/50 border-border"
                         />
                         <p className="text-xs text-muted-foreground">

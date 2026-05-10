@@ -184,7 +184,8 @@ export async function POST(request: NextRequest) {
     if (SMTP_HOST !== undefined && SMTP_HOST !== '') vars.SMTP_HOST = SMTP_HOST;
     if (SMTP_PORT !== undefined && SMTP_PORT !== '') vars.SMTP_PORT = SMTP_PORT;
     if (SMTP_USER !== undefined && SMTP_USER !== '') vars.SMTP_USER = SMTP_USER;
-    if (SMTP_PASS !== undefined && SMTP_PASS !== '') vars.SMTP_PASS = SMTP_PASS;
+    // Only update SMTP_PASS if user entered a new value (not masked and not empty)
+    if (SMTP_PASS !== undefined && SMTP_PASS !== '' && !SMTP_PASS.includes('****')) vars.SMTP_PASS = SMTP_PASS;
     if (FROM_EMAIL !== undefined && FROM_EMAIL !== '') vars.FROM_EMAIL = FROM_EMAIL;
 
     if (Object.keys(vars).length === 0) {
