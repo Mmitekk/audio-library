@@ -92,13 +92,13 @@ export async function sendFulfilledNotification(request: SoundRequest): Promise<
             <p><strong>Ваш запрос:</strong></p>
             <p style="white-space: pre-wrap;">${escapeHtml(request.description)}</p>
           </div>
-          <p>Вы можете найти и прослушать этот звук на нашем сайте.</p>
+          <p>Вы можете найти и прослушать этот звук на нашем сайте: <a href="https://audio-library-three.vercel.app" style="color: #0066cc;">audio-library-three.vercel.app</a></p>
           <p style="color: #888; font-size: 12px; margin-top: 24px;">
             Это автоматическое уведомление. Пожалуйста, не отвечайте на это письмо.
           </p>
         </div>
       `,
-      text: `Здравствуйте, ${request.name}!\n\nЗвук, который вы запрашивали, был добавлен в нашу аудиотеку.\n\nВаш запрос:\n${request.description}\n\nВы можете найти и прослушать этот звук на нашем сайте.\n\nЭто автоматическое уведомление. Пожалуйста, не отвечайте на это письмо.`,
+      text: `Здравствуйте, ${request.name}!\n\nЗвук, который вы запрашивали, был добавлен в нашу аудиотеку.\n\nВаш запрос:\n${request.description}\n\nВы можете найти и прослушать этот звук на нашем сайте: https://audio-library-three.vercel.app\n\nЭто автоматическое уведомление. Пожалуйста, не отвечайте на это письмо.`,
     });
 
     return { success: true };

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { addRequest, getRequests } from '@/lib/store';
+import { addRequest, getRequests, deleteRequest } from '@/lib/store';
 import { sendRequestNotification } from '@/lib/email';
 
 const COOKIE_NAME = 'admin_session';
@@ -95,6 +95,49 @@ export async function GET() {
     console.error('Failed to fetch requests:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch requests' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const cookieStore = await cookies();
+    const session = cookieStore.get(COOKIE_NAME);
+
+    if (!isAuthenticated(session?.value)) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const { id } = body as { id?: string };
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'Идентификатор запроса обязателен' },
+        { status: 400 }
+      );
+    }
+
+    const deleted = await deleteRequest(id);
+    if (!deleted) {
+      return NextResponse.json(
+        { success: false, error: 'Запрос не найден' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Запрос удалён',
+    });
+  } catch (error) {
+    console.error('Failed to delete request:', error);
+    return NextResponse.json(
+      { success: false, error: 'Ошибка при удалении запроса' },
       { status: 500 }
     );
   }

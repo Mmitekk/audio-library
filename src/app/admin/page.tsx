@@ -28,6 +28,7 @@ import {
   Eye,
   EyeOff,
   Check,
+  Trash2,
 } from 'lucide-react';
 
 interface SyncResult {
@@ -47,6 +48,7 @@ interface SoundRequest {
   description: string;
   createdAt: string;
   fulfilled: boolean;
+  fulfilledAt?: string;
 }
 
 interface AdminSettings {
@@ -83,6 +85,7 @@ export default function AdminPage() {
   const [requests, setRequests] = useState<SoundRequest[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [fulfillingId, setFulfillingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Test email state
   const [testEmailSending, setTestEmailSending] = useState(false);
@@ -305,9 +308,9 @@ export default function AdminPage() {
         alert(data.error || 'Ошибка при обработке запроса');
         return;
       }
-      // Update the local state
+      // Update the local state with fulfilledAt
       setRequests((prev) =>
-        prev.map((r) => (r.id === requestId ? { ...r, fulfilled: true } : r))
+        prev.map((r) => (r.id === requestId ? { ...r, fulfilled: true, fulfilledAt: new Date().toISOString() } : r))
       );
       if (data.emailError) {
         alert('Звук отмечен как добавленный, но не удалось отправить email: ' + data.emailError);
@@ -316,6 +319,28 @@ export default function AdminPage() {
       alert('Произошла ошибка при обработке запроса');
     } finally {
       setFulfillingId(null);
+    }
+  }
+
+  async function handleDeleteRequest(requestId: string) {
+    if (!confirm('Удалить эту заявку?')) return;
+    setDeletingId(requestId);
+    try {
+      const res = await fetch('/api/requests', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: requestId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(data.error || 'Ошибка при удалении');
+        return;
+      }
+      setRequests((prev) => prev.filter((r) => r.id !== requestId));
+    } catch {
+      alert('Произошла ошибка при удалении');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -817,7 +842,7 @@ export default function AdminPage() {
                         }`}
                       >
                         <div className="flex items-start justify-between gap-3 mb-2">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium text-sm">{request.name}</span>
                             {request.email && (
                               <Badge variant="outline" className="text-xs font-normal">
@@ -832,21 +857,43 @@ export default function AdminPage() {
                               </Badge>
                             )}
                           </div>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive flex-shrink-0"
+                            disabled={deletingId === request.id}
+                            onClick={() => handleDeleteRequest(request.id)}
+                            title="Удалить заявку"
+                          >
+                            {deletingId === request.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground mb-1">
+                          <div className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
                             {formatDate(request.createdAt)}
                           </div>
+                          {request.fulfilled && request.fulfilledAt && (
+                            <div className="flex items-center gap-1 text-green-600">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Обработано: {formatDate(request.fulfilledAt)}
+                            </div>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                           {request.description}
                         </p>
                         {!request.fulfilled && (
-                          <div className="mt-3">
+                          <div className="mt-3 flex items-center gap-2">
                             <Button
                               size="sm"
                               variant="outline"
                               className="gap-2 text-xs"
-                              disabled={fulfillingId === request.id}
+                              disabled={fulfillingId === request.id || deletingId === request.id}
                               onClick={() => handleFulfillRequest(request.id)}
                             >
                               {fulfillingId === request.id ? (

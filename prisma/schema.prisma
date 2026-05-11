@@ -8,10 +8,11 @@ datasource db {
 }
 
 model SoundRequest {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
   email       String?
   description String
-  fulfilled   Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  fulfilled   Boolean   @default(false)
+  fulfilledAt DateTime?
+  createdAt   DateTime  @default(now())
 }
