@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { updateMultipleEnvVars, triggerRedeploy, testEmail } from '@/lib/settings';
-import { addRequest, getRequests } from '@/lib/store';
-import { sendRequestNotification } from '@/lib/email';
+import { addRequest, getRequests, markRequestFulfilled } from '@/lib/store';
+import { sendRequestNotification, sendFulfilledNotification } from '@/lib/email';
 
 const COOKIE_NAME = 'admin_session';
 
@@ -75,6 +75,52 @@ export async function POST(request: NextRequest) {
     if (action === 'test_email') {
       const result = await testEmail();
       return NextResponse.json(result);
+    }
+
+    // Handle notify_fulfilled
+    if (action === 'notify_fulfilled') {
+      const { requestId, requestEmail, requestName, requestDescription } = body as {
+        requestId?: string;
+        requestEmail?: string;
+        requestName?: string;
+        requestDescription?: string;
+      };
+
+      if (!requestId) {
+        return NextResponse.json(
+          { success: false, error: 'Идентификатор запроса обязателен' },
+          { status: 400 }
+        );
+      }
+
+      const request = markRequestFulfilled(requestId);
+      if (!request) {
+        return NextResponse.json(
+          { success: false, error: 'Запрос не найден' },
+          { status: 404 }
+        );
+      }
+
+      // Send email notification if email was provided
+      let emailSent = false;
+      let emailError = '';
+      if (request.email) {
+        const emailResult = await sendFulfilledNotification(request);
+        emailSent = emailResult.success;
+        if (!emailResult.success) {
+          emailError = emailResult.error || 'Ошибка отправки уведомления';
+          console.warn('Fulfilled notification failed:', emailError);
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: request.email
+          ? (emailSent ? 'Звук отмечен как добавленный, уведомление отправлено' : 'Звук отмечен как добавленный, но не удалось отправить уведомление')
+          : 'Звук отмечен как добавленный (без email)',
+        emailSent,
+        emailError,
+      });
     }
 
     // Handle credential change

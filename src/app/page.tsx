@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
@@ -15,6 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import Link from 'next/link';
 import {
   Search,
   Play,
@@ -490,6 +492,7 @@ export default function Home() {
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [requestSuccess, setRequestSuccess] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [consentGiven, setConsentGiven] = useState(false);
 
   // Fetch folder structure
   useEffect(() => {
@@ -746,6 +749,7 @@ export default function Home() {
 
       setRequestSuccess(true);
       setRequestForm({ name: '', email: '', description: '' });
+      setConsentGiven(false);
 
       // Close dialog after a brief delay to show success
       setTimeout(() => {
@@ -878,6 +882,29 @@ export default function Home() {
                       />
                     </div>
 
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="request-consent"
+                        checked={consentGiven}
+                        onCheckedChange={(checked) => setConsentGiven(checked === true)}
+                        className="mt-0.5"
+                      />
+                      <label
+                        htmlFor="request-consent"
+                        className="text-xs text-muted-foreground leading-relaxed cursor-pointer"
+                      >
+                        Нажимая кнопку «Отправить заявку», вы соглашаетесь с{' '}
+                        <Link
+                          href="/privacy"
+                          className="text-primary underline underline-offset-2 hover:text-primary/80"
+                          target="_blank"
+                        >
+                          Политикой обработки персональных данных
+                        </Link>{' '}
+                        и подтверждаете, что ваши персональные данные будут обработаны в соответствии с законодательством Российской Федерации.
+                      </label>
+                    </div>
+
                     {requestError && (
                       <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 p-3 rounded-lg">
                         <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -890,7 +917,8 @@ export default function Home() {
                       disabled={
                         requestSubmitting ||
                         !requestForm.name.trim() ||
-                        !requestForm.description.trim()
+                        !requestForm.description.trim() ||
+                        !consentGiven
                       }
                       className="w-full gap-2"
                     >
@@ -1124,8 +1152,21 @@ export default function Home() {
       )}
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-border py-4 text-center text-xs text-muted-foreground">
-        <p>Аудиотека © {new Date().getFullYear()}</p>
+      <footer className="border-t border-border/50 bg-background/80 backdrop-blur-sm">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Music className="h-4 w-4" />
+              <span>Аудиотека</span>
+              <span className="text-muted-foreground/50">© {new Date().getFullYear()}</span>
+            </div>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <Link href="/privacy" className="hover:text-foreground transition-colors">
+                Политика конфиденциальности
+              </Link>
+            </div>
+          </div>
+        </div>
       </footer>
     </div>
   );

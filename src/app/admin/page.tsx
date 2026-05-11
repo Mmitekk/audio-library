@@ -27,6 +27,7 @@ import {
   Send,
   Eye,
   EyeOff,
+  Check,
 } from 'lucide-react';
 
 interface SyncResult {
@@ -45,6 +46,7 @@ interface SoundRequest {
   email?: string;
   description: string;
   createdAt: string;
+  fulfilled: boolean;
 }
 
 interface AdminSettings {
@@ -80,6 +82,7 @@ export default function AdminPage() {
   // Requests state
   const [requests, setRequests] = useState<SoundRequest[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(true);
+  const [fulfillingId, setFulfillingId] = useState<string | null>(null);
 
   // Test email state
   const [testEmailSending, setTestEmailSending] = useState(false);
@@ -286,6 +289,33 @@ export default function AdminPage() {
       });
     } finally {
       setCredentialsSaving(false);
+    }
+  }
+
+  async function handleFulfillRequest(requestId: string) {
+    setFulfillingId(requestId);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'notify_fulfilled', requestId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(data.error || 'Ошибка при обработке запроса');
+        return;
+      }
+      // Update the local state
+      setRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? { ...r, fulfilled: true } : r))
+      );
+      if (data.emailError) {
+        alert('Звук отмечен как добавленный, но не удалось отправить email: ' + data.emailError);
+      }
+    } catch {
+      alert('Произошла ошибка при обработке запроса');
+    } finally {
+      setFulfillingId(null);
     }
   }
 
@@ -780,7 +810,11 @@ export default function AdminPage() {
                     {requests.map((request) => (
                       <div
                         key={request.id}
-                        className="p-4 rounded-lg border border-border bg-secondary/30 hover:bg-secondary/50 transition-colors"
+                        className={`p-4 rounded-lg border transition-colors ${
+                          request.fulfilled
+                            ? 'border-green-500/30 bg-green-500/5'
+                            : 'border-border bg-secondary/30 hover:bg-secondary/50'
+                        }`}
                       >
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <div className="flex items-center gap-2">
@@ -789,6 +823,12 @@ export default function AdminPage() {
                               <Badge variant="outline" className="text-xs font-normal">
                                 <Mail className="h-3 w-3 mr-1" />
                                 {request.email}
+                              </Badge>
+                            )}
+                            {request.fulfilled && (
+                              <Badge className="text-xs bg-green-500/15 text-green-500 border-green-500/30 hover:bg-green-500/20">
+                                <Check className="h-3 w-3 mr-1" />
+                                Обработано
                               </Badge>
                             )}
                           </div>
@@ -800,6 +840,29 @@ export default function AdminPage() {
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                           {request.description}
                         </p>
+                        {!request.fulfilled && (
+                          <div className="mt-3">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2 text-xs"
+                              disabled={fulfillingId === request.id}
+                              onClick={() => handleFulfillRequest(request.id)}
+                            >
+                              {fulfillingId === request.id ? (
+                                <>
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  Обработка...
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="h-3.5 w-3.5" />
+                                  Звук добавлен
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
