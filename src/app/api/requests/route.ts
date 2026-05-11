@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const storedRequest = addRequest(
+    const storedRequest = await addRequest(
       name.trim(),
       email?.trim() || undefined,
       description.trim()
@@ -89,7 +89,7 @@ export async function GET() {
       );
     }
 
-    const requests = getRequests();
+    const requests = await getRequests();
     return NextResponse.json({ success: true, data: requests });
   } catch (error) {
     console.error('Failed to fetch requests:', error);

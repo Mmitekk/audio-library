@@ -1,3 +1,5 @@
+import { db } from './db';
+
 export interface SoundRequest {
   id: string;
   name: string;
@@ -7,29 +9,53 @@ export interface SoundRequest {
   fulfilled: boolean;
 }
 
-// In-memory store for requests (survives between requests in the same server process)
-const requests: SoundRequest[] = [];
-
-export function addRequest(name: string, email: string | undefined, description: string): SoundRequest {
-  const request: SoundRequest = {
-    id: crypto.randomUUID(),
-    name,
-    email: email || undefined,
-    description,
-    createdAt: new Date().toISOString(),
-    fulfilled: false,
+export async function addRequest(name: string, email: string | undefined, description: string): Promise<SoundRequest> {
+  const request = await db.soundRequest.create({
+    data: {
+      name,
+      email: email || null,
+      description,
+    },
+  });
+  return {
+    id: request.id,
+    name: request.name,
+    email: request.email || undefined,
+    description: request.description,
+    createdAt: request.createdAt.toISOString(),
+    fulfilled: request.fulfilled,
   };
-  requests.unshift(request); // newest first
-  return request;
 }
 
-export function getRequests(): SoundRequest[] {
-  return [...requests];
+export async function getRequests(): Promise<SoundRequest[]> {
+  const requests = await db.soundRequest.findMany({
+    orderBy: { createdAt: 'desc' },
+  });
+  return requests.map((r) => ({
+    id: r.id,
+    name: r.name,
+    email: r.email || undefined,
+    description: r.description,
+    createdAt: r.createdAt.toISOString(),
+    fulfilled: r.fulfilled,
+  }));
 }
 
-export function markRequestFulfilled(id: string): SoundRequest | null {
-  const request = requests.find((r) => r.id === id);
-  if (!request) return null;
-  request.fulfilled = true;
-  return request;
+export async function markRequestFulfilled(id: string): Promise<SoundRequest | null> {
+  try {
+    const request = await db.soundRequest.update({
+      where: { id },
+      data: { fulfilled: true },
+    });
+    return {
+      id: request.id,
+      name: request.name,
+      email: request.email || undefined,
+      description: request.description,
+      createdAt: request.createdAt.toISOString(),
+      fulfilled: request.fulfilled,
+    };
+  } catch {
+    return null;
+  }
 }

@@ -208,19 +208,17 @@ export async function triggerRedeploy(): Promise<{ success: boolean; error?: str
 
 export async function testEmail(): Promise<{ success: boolean; error?: string }> {
   const { sendRequestNotification } = await import('./email');
-  const { addRequest } = await import('./store');
 
-  // Create a test request and send it
-  const testRequest = addRequest('Тест', undefined, 'Это тестовое письмо для проверки настроек уведомлений.');
+  // Create a fake test request (no DB write) just to test email delivery
+  const testRequest = {
+    id: 'test',
+    name: 'Тест',
+    email: undefined,
+    description: 'Это тестовое письмо для проверки настроек уведомлений.',
+    createdAt: new Date().toISOString(),
+    fulfilled: false,
+  };
   const result = await sendRequestNotification(testRequest);
-
-  // Remove the test request from the store
-  const { getRequests } = await import('./store');
-  const requests = getRequests();
-  const idx = requests.findIndex((r) => r.id === testRequest.id);
-  if (idx !== -1) {
-    requests.splice(idx, 1);
-  }
 
   return result;
 }

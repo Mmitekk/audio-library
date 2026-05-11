@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { updateMultipleEnvVars, triggerRedeploy, testEmail } from '@/lib/settings';
-import { addRequest, getRequests, markRequestFulfilled } from '@/lib/store';
-import { sendRequestNotification, sendFulfilledNotification } from '@/lib/email';
+import { markRequestFulfilled } from '@/lib/store';
+import { sendFulfilledNotification } from '@/lib/email';
 
 const COOKIE_NAME = 'admin_session';
 
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const request = markRequestFulfilled(requestId);
+      const request = await markRequestFulfilled(requestId);
       if (!request) {
         return NextResponse.json(
           { success: false, error: 'Запрос не найден' },
