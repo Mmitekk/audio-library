@@ -149,9 +149,9 @@ export async function triggerRedeploy(): Promise<{ success: boolean; error?: str
   }
 
   try {
-    // Get the latest deployment for the project
-    const deploymentsResponse = await fetch(
-      `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/deployments?state=READY&limit=1`,
+    // Get the latest production deployment to find the git commit SHA
+    const projectResponse = await fetch(
+      `https://api.vercel.com/v6/projects/${VERCEL_PROJECT_ID}`,
       {
         headers: {
           Authorization: `Bearer ${VERCEL_TOKEN}`,
@@ -159,18 +159,19 @@ export async function triggerRedeploy(): Promise<{ success: boolean; error?: str
       }
     );
 
-    if (!deploymentsResponse.ok) {
-      throw new Error(`Failed to fetch deployments: ${deploymentsResponse.status}`);
+    if (!projectResponse.ok) {
+      throw new Error(`Failed to fetch project: ${projectResponse.status}`);
     }
 
-    const deploymentsData = await deploymentsResponse.json();
-    const latestDeployment = deploymentsData.deployments?.[0];
+    const projectData = await projectResponse.json();
+    const prodAlias = projectData.alias?.[0]?.deployment;
+    const commitSha = prodAlias?.meta?.githubCommitSha;
 
-    if (!latestDeployment) {
-      throw new Error('No ready deployment found to redeploy from');
+    if (!commitSha) {
+      throw new Error('No git commit SHA found for production deployment');
     }
 
-    // Trigger redeploy using the production deployment's config
+    // Trigger redeploy using gitSource (the only reliable method)
     const redeployResponse = await fetch(
       `https://api.vercel.com/v13/deployments`,
       {
@@ -180,9 +181,14 @@ export async function triggerRedeploy(): Promise<{ success: boolean; error?: str
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: latestDeployment.name,
+          name: 'audio-library',
           project: VERCEL_PROJECT_ID,
-          source: latestDeployment.source,
+          gitSource: {
+            type: 'github',
+            repoId: 1232255779,
+            ref: 'main',
+            sha: commitSha,
+          },
           target: 'production',
         }),
       }
